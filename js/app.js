@@ -1,5 +1,5 @@
 import { APP_CONFIG } from './config.js';
-import { MAX_ENTRIES, validateFile, validateEntry, getUploadUrl, isStoredResponse, formatFileSize, pendingEntries } from './validation.js?v=axv-lab-v1';
+import { MAX_ENTRIES, validateFile, validateEntry, getUploadUrl, isStoredResponse, formatFileSize, pendingEntries } from './validation.js?v=axv-lab-v2';
 
 function selectionKey(file) {
   return JSON.stringify([file.name, file.size, file.type, file.lastModified]);
@@ -231,7 +231,13 @@ async function getTurnstileToken(entry) {
         execution: 'execute', appearance: 'interaction-only', retry: 'never',
         'refresh-expired': 'manual',
         callback: token => finish(null, token),
-        'error-callback': () => { finish(new Error('Pemeriksaan keamanan gagal. Periksa koneksi, lalu coba lagi.')); return true; },
+        'error-callback': code => {
+          // Public provider error codes help diagnose configuration failures.
+          // Never log security tokens, receipt contents, IDs or filenames.
+          console.warn('Pemeriksaan keamanan Turnstile gagal.', /^\d{6}$/.test(String(code)) ? String(code) : 'unknown');
+          finish(new Error('Pemeriksaan keamanan gagal. Periksa koneksi, lalu coba lagi.'));
+          return true;
+        },
         'expired-callback': () => finish(new Error('Pemeriksaan keamanan kedaluwarsa. Coba unggah nota lagi.')),
         'timeout-callback': () => finish(new Error('Waktu pemeriksaan keamanan habis. Coba lagi.')),
         'unsupported-callback': () => finish(new Error('Browser ini tidak mendukung pemeriksaan keamanan. Gunakan browser terbaru.')),
