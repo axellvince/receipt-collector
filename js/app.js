@@ -1,5 +1,5 @@
 import { APP_CONFIG } from './config.js';
-import { MAX_ENTRIES, validateFile, validateEntry, getUploadUrl, isStoredResponse, formatFileSize, pendingEntries } from './validation.js?v=original-v3-20mb';
+import { MAX_ENTRIES, validateFile, validateEntry, getUploadUrl, isStoredResponse, formatFileSize, pendingEntries } from './validation.js?v=axv-lab-v1';
 
 function selectionKey(file) {
   return JSON.stringify([file.name, file.size, file.type, file.lastModified]);
