@@ -1,5 +1,5 @@
 import { APP_CONFIG } from './config.js';
-import { MAX_ENTRIES, validateFile, validateEntry, getUploadUrl, isStoredResponse, formatFileSize, pendingEntries } from './validation.js?v=axv-lab-v2';
+import { MAX_ENTRIES, validateFile, validateEntry, getUploadUrl, isStoredResponse, formatFileSize, pendingEntries, getTurnstileErrorMessage } from './validation.js?v=axv-lab-v3';
 
 function selectionKey(file) {
   return JSON.stringify([file.name, file.size, file.type, file.lastModified]);
@@ -228,14 +228,14 @@ async function getTurnstileToken(entry) {
         sitekey: APP_CONFIG.turnstileSiteKey,
         action: 'receipt_upload', cData: entry.id,
         size: window.innerWidth < 380 ? 'compact' : 'normal',
-        execution: 'execute', appearance: 'interaction-only', retry: 'never',
+        execution: 'execute', appearance: 'always', retry: 'never',
         'refresh-expired': 'manual',
         callback: token => finish(null, token),
         'error-callback': code => {
           // Public provider error codes help diagnose configuration failures.
           // Never log security tokens, receipt contents, IDs or filenames.
-          console.warn('Pemeriksaan keamanan Turnstile gagal.', /^\d{6}$/.test(String(code)) ? String(code) : 'unknown');
-          finish(new Error('Pemeriksaan keamanan gagal. Periksa koneksi, lalu coba lagi.'));
+          console.warn('Pemeriksaan keamanan Turnstile gagal.', typeof code === 'string' && /^\d{6}$/.test(code) ? code : 'unknown');
+          finish(new Error(getTurnstileErrorMessage(code)));
           return true;
         },
         'expired-callback': () => finish(new Error('Pemeriksaan keamanan kedaluwarsa. Coba unggah nota lagi.')),

@@ -43,6 +43,20 @@ export function getUploadUrl(config) {
   } catch { return null; }
 }
 
+// Only fixed copy reaches the UI; never display external error text or codes.
+export function getTurnstileErrorMessage(code) {
+  const value = typeof code === 'string' ? code.trim() :
+    typeof code === 'number' && Number.isSafeInteger(code) ? String(code) : '';
+  const normalized = /^[0-9]{6}$/.test(value) ? value : '';
+  if (normalized === '110200') return 'Pemeriksaan keamanan belum diaktifkan untuk alamat situs ini. Hubungi pengelola.';
+  if (['110100', '110110', '400020', '400021', '400070'].includes(normalized)) return 'Pengaturan pemeriksaan keamanan belum sesuai. Hubungi pengelola.';
+  if (['110600', '110620'].includes(normalized)) return 'Waktu pemeriksaan keamanan habis. Coba lagi dan ikuti petunjuk yang muncul.';
+  if (normalized === '200100') return 'Periksa tanggal dan waktu perangkat. Jika sudah benar, muat ulang halaman dan coba lagi.';
+  if (normalized === '200500') return 'Pemeriksaan keamanan tidak dapat dimuat. Periksa koneksi atau pemblokir konten, lalu coba lagi.';
+  if (/^(300|600)[0-9]{3}$/.test(normalized)) return 'Pemeriksaan keamanan belum berhasil. Coba lagi secara langsung di browser Anda, atau gunakan browser maupun perangkat lain.';
+  return 'Pemeriksaan keamanan belum berhasil. Coba lagi dan ikuti petunjuk yang muncul.';
+}
+
 // Strictly check the server acknowledgement before showing a success state.
 // Original names and bytes must be confirmed by the server, never inferred.
 export function isStoredResponse(result, payload) {
