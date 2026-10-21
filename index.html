@@ -4,72 +4,57 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <meta name="theme-color" content="#0f766e">
-  <meta name="description" content="Kirim nota tulisan tangan dan hasil cetak melalui formulir pengumpulan nota.">
+  <meta name="theme-color" content="#087e7b">
+  <meta name="description" content="Unggah tagihan atau bukti pembayaran dalam bentuk foto nota, dokumen digital, atau screenshot.">
   <title>Pengumpulan Nota</title>
-  <link rel="stylesheet" href="./css/styles.css">
-  <script type="module" src="./js/app.js"></script>
+  <link rel="stylesheet" href="./css/styles.css?v=original-v2">
+  <script type="module" src="./js/app.js?v=original-v2"></script>
 </head>
 <body>
   <a class="skip-link" href="#receipt-form">Langsung ke formulir</a>
-  <header class="site-header">
-    <div class="header-inner">
-      <a class="brand" href="./" aria-label="Pengumpulan Nota, halaman utama">
-        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 8h6M9 12h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
-        <span>Nota<span class="brand-dot">.</span></span>
-      </a>
-      <span class="header-label"><span class="tiny-dot" aria-hidden="true"></span> Pengumpulan nota</span>
-    </div>
-  </header>
-
+  <header class="site-header"><div class="header-inner"><a class="brand" href="./" aria-label="Pengumpulan Nota, halaman utama"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 8h6M9 12h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span><span>Nota<span class="brand-dot">.</span></span></a><span class="header-label">Pengumpulan nota</span></div></header>
   <main class="page-shell">
     <section class="intro" aria-labelledby="page-title">
-      <span class="eyebrow">Setiap nota yang diunggah diperlakukan sebagai data rahasia dan hanya digunakan untuk melatih AI Transsion.</span>
-      <h1 id="page-title">Pengumpulan Nota</h1>
-      <p class="intro-copy">Unggah nota tulisan tangan atau hasil cetak. Pilih kategori nota, lalu sistem akan menyimpan file secara otomatis dengan nama yang sesuai.</p>
-      <div class="intro-meta"><span><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="4" y="8" width="12" height="9" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M6.5 8V5a3.5 3.5 0 0 1 7 0v3" stroke="currentColor" stroke-width="1.4"/></svg>Tanpa perlu masuk akun</span><span>Maksimal 10 nota per sesi</span></div>
+      <p class="eyebrow">Setiap nota yang diunggah diperlakukan sebagai data rahasia dan hanya digunakan untuk melatih AI Transsion.</p>
+      <h1 id="page-title">Unggah nota Anda</h1>
+      <p class="intro-copy">Pilih beberapa file sekaligus, lalu unggah semua nota dalam satu langkah.</p>
     </section>
-
-    <div id="config-notice" class="notice notice-warning" role="status" hidden><span class="notice-symbol" aria-hidden="true">!</span><div><strong>Pengunggahan belum diaktifkan</strong><p>Pengelola perlu melengkapi koneksi layanan. Anda tetap dapat mencoba formulir, tetapi file belum dapat dikirim.</p></div></div>
-    <noscript><div class="notice notice-warning">Aktifkan JavaScript pada browser untuk mengisi formulir dan mengunggah nota.</div></noscript>
-
-    <div class="content-grid">
-      <form id="receipt-form" novalidate>
-        <div class="section-heading"><div><h2>Nota Anda</h2><p>Isi satu kartu untuk setiap nota.</p></div><span id="entry-count" class="count-pill">1 dari 10</span></div>
-        <div id="entries" class="entries"></div>
-        <button type="button" id="add-entry" class="add-button"><span aria-hidden="true">＋</span> Tambah Nota <span class="button-detail">Maks. 10 nota</span></button>
-
-        <section class="submit-panel" aria-label="Kirim nota">
-          <div id="verification-panel" class="verification-panel" hidden><p id="verification-label">Memeriksa keamanan unggahan…</p><div id="turnstile-container"></div></div>
-          <p class="submission-feedback" id="submission-feedback" role="status" aria-live="polite">Semua kolom bertanda <span class="required">*</span> wajib diisi.</p>
-          <button type="submit" id="submit-all" class="primary-button"><span id="submit-text">Unggah 1 Nota</span><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 13V3m0 0L6 7m4-4 4 4M4 13v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-          <p class="submit-note">Tunggu hingga status setiap nota tampil. Tetap buka halaman selama proses pengiriman.</p>
-        </section>
-        <section id="results-summary" class="results-summary" aria-labelledby="results-heading" hidden><h2 id="results-heading">Nota berhasil dikirim!</h2><p id="results-count"></p><ul id="saved-files"></ul></section>
-      </form>
-
-      <aside class="guidance" aria-label="Panduan pengunggahan">
-        <div class="guide-card"><div class="guide-heading"><span class="guide-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M8 3h8l3 3v15H5V3h3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="m8 13 2.5 2.5L16 10M15 3v4h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><h2>Sebelum mengunggah</h2></div>
-          <ol class="guide-steps"><li><span class="step-number">1</span><div><strong>Pastikan nota terbaca</strong><p>Ambil foto dari atas, dengan cahaya cukup dan seluruh nota terlihat.</p></div></li><li><span class="step-number">2</span><div><strong>Pilih jenis dan kategori</strong><p>Sesuaikan pilihan pada setiap kartu dengan nota yang Anda unggah.</p></div></li><li><span class="step-number">3</span><div><strong>Unggah, lalu cek status</strong><p>Nama file tersimpan akan muncul setelah pengiriman berhasil.</p></div></li></ol>
-          <div class="format-box"><span class="small-label">FORMAT YANG DIDUKUNG</span><div class="format-tags"><span>JPG</span><span>PNG</span><span>WEBP</span><span>PDF</span></div><p>Maksimal 5 MB per file. File asli disimpan tanpa kompresi ulang.</p></div>
+    <div id="config-notice" class="notice notice-warning" role="status" hidden><strong>Pengunggahan belum diaktifkan</strong><p>Pengelola perlu melengkapi koneksi layanan. File belum dapat dikirim.</p></div>
+    <noscript><div class="notice notice-warning">Aktifkan JavaScript pada browser untuk memilih file dan mengunggah nota.</div></noscript>
+    <aside class="receipt-guide" aria-label="Panduan nota yang dapat diunggah">
+      <h2>Tagihan maupun bukti pembayaran dapat diunggah</h2>
+      <div class="guide-comparison">
+        <section><h3>Tagihan</h3><p>Dokumen berisi rincian biaya dan jumlah yang harus dibayar untuk barang atau jasa.</p><div class="guide-examples"><p>Contoh:</p><ul><li>Tagihan listrik atau air.</li><li>Tagihan internet atau telepon.</li><li>Tagihan biaya sekolah atau kuliah.</li><li>Tagihan rumah sakit atau klinik.</li><li>Invoice pembelian barang atau jasa.</li></ul></div></section>
+        <section><h3>Bukti Pembayaran</h3><p>Dokumen yang menunjukkan bahwa pembayaran sudah dilakukan.</p><div class="guide-examples"><p>Contoh:</p><ul><li>Struk pembelian bensin di SPBU.</li><li>Struk makanan atau minuman dari restoran dan kafe.</li><li>Struk belanja di minimarket, supermarket, atau toko.</li><li>Struk pembayaran parkir atau tol.</li><li>Kuitansi pembayaran sewa, servis, atau biaya sekolah.</li><li>Bukti transfer dari bank atau dompet digital.</li></ul></div></section>
+      </div>
+      <p class="guide-formats">Boleh berupa <strong>foto nota tulisan tangan, hasil printer, dokumen digital, atau screenshot.</strong> Pastikan seluruh nota terlihat dan tulisannya terbaca.</p>
+    </aside>
+    <form id="receipt-form" novalidate>
+      <section class="upload-card" aria-labelledby="files-heading">
+        <header class="upload-card-header"><h2 id="files-heading">File nota</h2><span id="entry-count">0 dari 10 nota</span></header>
+        <div class="upload-card-body">
+          <label class="file-picker" id="dropzone"><span id="choose-label">Pilih beberapa file nota</span><span class="picker-hint">Bisa pilih beberapa file sekaligus atau tarik ke sini. Maksimal 10 nota.</span><input id="file-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple aria-label="Pilih beberapa file nota" aria-describedby="file-formats selection-feedback"></label>
+          <p class="file-formats" id="file-formats">JPG, PNG, WEBP, atau PDF · Maksimal 5 MB per file. File asli disimpan tanpa kompresi ulang.</p>
+          <p id="selection-feedback" class="selection-feedback" role="alert" hidden></p>
+          <div id="entries" class="entries" aria-label="File yang dipilih"></div>
+          <p id="submission-feedback" class="submission-feedback" role="status" aria-live="polite">Pilih file nota untuk mulai mengunggah.</p>
         </div>
-        <div class="privacy-note"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 4 6v5c0 5 8 10 8 10s8-5 8-10V6l-8-3Z" stroke="currentColor" stroke-width="1.6"/><path d="m8.5 11.5 2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><div><strong>Disimpan untuk pengelola</strong><p>Nota dan keterangannya dikirim ke Google Drive serta Google Sheets milik pengelola. File tidak ditampilkan secara publik; pengelola dan pihak yang diberi akses dapat membacanya.</p><p>Hindari mengirim informasi sensitif yang tidak diperlukan.</p></div></div>
-      </aside>
-    </div>
+      </section>
+      <section class="submit-panel" aria-label="Kirim nota">
+        <div id="verification-panel" class="verification-panel" hidden><p id="verification-label">Memeriksa keamanan unggahan…</p><div id="turnstile-container"></div></div>
+        <button type="submit" id="submit-all" class="primary-button" disabled><span id="submit-text">Unggah semua nota (0)</span><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 13V3m0 0L6 7m4-4 4 4M4 13v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <p class="submit-note">Tunggu hingga status setiap nota tampil. Tetap buka halaman selama proses pengiriman.</p>
+      </section>
+      <section id="results-summary" class="results-summary" aria-labelledby="results-heading" hidden><h2 id="results-heading">Hasil unggahan</h2><p id="results-count"></p><ul id="saved-files"></ul></section>
+    </form>
+    <p class="privacy-note">Nota dikirim ke penyimpanan milik pengelola. File tidak ditampilkan secara publik; pengelola dan pihak yang diberi akses dapat membacanya.</p>
   </main>
   <footer class="site-footer"><span>Pengumpulan Nota</span><span>Rapi dalam satu tempat.</span></footer>
-
   <template id="entry-template">
-    <article class="receipt-card">
-      <header class="card-header"><div class="card-title"><span class="receipt-number" aria-hidden="true">01</span><h3>Nota 1</h3></div><div class="card-header-actions"><span class="status-badge" data-status="waiting">Menunggu</span><button type="button" class="icon-button remove-entry" title="Hapus nota"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div></header>
-      <div class="card-body">
-        <fieldset class="type-field"><legend>Apa jenis nota yang ingin diunggah? <span class="required">*</span></legend><div class="type-options"><label class="type-option"><input type="radio" value="handwritten"><span class="type-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m15 4 5 5M4 20l5-1L20 8a2.1 2.1 0 0 0-3-3L6 16l-2 4Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></span><span>Tulisan Tangan</span></label><label class="type-option"><input type="radio" value="printed"><span class="type-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M7 8V3h10v5M7 17H4V8h16v9h-3M7 14h10v7H7v-7Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="17" cy="11" r="1" fill="currentColor"/></svg></span><span>Hasil Printer</span></label></div><p class="field-error type-error" hidden></p></fieldset>
-        <div class="field category-field"><label class="field-label category-label">Nota apakah ini? <span class="required">*</span></label><select class="category-select" required><option value="">Pilih kategori nota</option></select><p class="field-error category-error" hidden></p></div>
-        <div class="field notes-field" hidden><label class="field-label notes-label">Keterangan tambahan <span class="optional">(opsional)</span></label><textarea class="notes-input" rows="2" maxlength="500" placeholder="Misalnya: nota servis kendaraan"></textarea><p class="field-help">Maksimal 500 karakter.</p><p class="field-error notes-error" hidden></p></div>
-        <div class="field upload-field"><p class="field-label upload-label">File nota <span class="required">*</span></p><input class="file-input visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" tabindex="-1"><input class="camera-input visually-hidden" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" tabindex="-1"><div class="dropzone"><button type="button" class="pick-file"><span class="upload-icon" aria-hidden="true"><svg viewBox="0 0 28 28" fill="none"><path d="M14 18V5m0 0L9 10m5-5 5 5M5 18v5h18v-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><strong>Klik untuk memilih file <span>atau tarik ke sini</span></strong><span class="upload-hint">JPG, PNG, WEBP, PDF · Maks. 5 MB</span></button><button type="button" class="camera-button"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m7 4 1-2h4l1 2h4v13H3V4h4Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.4"/></svg>Ambil foto</button></div><div class="file-preview" hidden><div class="preview-visual"><img class="preview-image" alt="Pratinjau nota terpilih" hidden><span class="pdf-preview" aria-hidden="true" hidden>PDF</span></div><div class="preview-details"><strong class="original-filename"></strong><span class="file-size"></span><div class="file-actions"><button type="button" class="replace-file text-button">Ganti file</button><button type="button" class="clear-file text-button">Hapus file</button></div></div></div><p class="field-error file-error" hidden></p></div>
-        <div class="entry-progress" hidden><progress max="100" aria-label="Progres unggahan"></progress><span class="progress-text"></span></div>
-        <div class="entry-status" aria-live="polite"><p class="status-description">Pilih jenis, kategori, dan file nota Anda.</p><p class="saved-filename" hidden></p></div><p class="entry-lock-note" hidden>File dan pilihan dikunci setelah pengiriman dimulai. Percobaan ulang memakai ID yang sama agar tidak membuat salinan.</p><button type="button" class="retry-entry secondary-button" hidden>Coba lagi</button>
-      </div>
+    <article class="receipt-file" data-status="waiting">
+      <div class="preview-visual"><img class="preview-image" alt="Pratinjau nota terpilih" hidden><span class="pdf-preview" aria-hidden="true" hidden>PDF</span></div>
+      <div class="file-details"><h3 class="original-filename"></h3><p class="file-size"></p><p class="status-description"></p><div class="entry-progress" hidden><progress max="100" aria-label="Progres unggahan"></progress><span class="progress-text"></span></div><p class="saved-filename" hidden></p><p class="entry-lock-note" hidden>Percobaan ulang memakai file dan ID yang sama agar tidak membuat salinan.</p></div>
+      <div class="file-end"><span class="status-badge" data-status="waiting">Siap diunggah</span><button type="button" class="remove-entry text-button">Hapus</button><button type="button" class="retry-entry text-button" hidden>Coba lagi</button></div>
     </article>
   </template>
 </body>

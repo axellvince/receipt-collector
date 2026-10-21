@@ -1,14 +1,57 @@
 import { APP_CONFIG } from './config.js';
-import { CATEGORIES, MAX_ENTRIES, validateFile, validateEntry, getUploadUrl, isStoredResponse, formatFileSize, pendingEntries } from './validation.js';
+import { MAX_ENTRIES, validateFile, validateEntry, getUploadUrl, isStoredResponse, formatFileSize, pendingEntries } from './validation.js?v=original-v2';
 
+function selectionKey(file) {
+  return JSON.stringify([file.name, file.size, file.type, file.lastModified]);
+}
+
+// A selection is atomic: never silently drop unsupported or excess files.
+export function selectFilesForBatch(currentEntries, selectedFiles, maximum = MAX_ENTRIES) {
+  const selected = Array.from(selectedFiles || []);
+  const seen = new Set(currentEntries.map(entry => selectionKey(entry.file)));
+  const files = [];
+  let duplicates = 0;
+  for (const file of selected) {
+    const key = selectionKey(file);
+    if (seen.has(key)) { duplicates += 1; continue; }
+    const error = validateFile(file);
+    if (error) return { files: [], duplicates: 0, error: `${file.name || 'File'}: ${error}` };
+    seen.add(key);
+    files.push(file);
+  }
+  if (currentEntries.length + files.length > maximum) {
+    return { files: [], duplicates: 0, error: `Maksimal ${maximum} nota per sesi. Anda masih dapat menambahkan ${Math.max(0, maximum - currentEntries.length)} file. Pilih ulang file yang ingin ditambahkan.` };
+  }
+  return { files, duplicates, error: '' };
+}
+
+export function createUploadPayload(submissionId, entry, fileBase64) {
+  return Object.freeze({
+    schemaVersion: 2, uploadMode: 'original', submissionId, entryId: entry.id,
+    originalFilename: entry.file.name, mimeType: entry.file.type,
+    fileSize: entry.file.size, fileBase64,
+  });
+}
+
+// One user action sends all pending files; each gets its own security token and
+// verified acknowledgement. Confirmed files never enter a later retry batch.
+export async function processUploadBatch(requestedEntries, uploadOne) {
+  const batch = pendingEntries(requestedEntries);
+  for (let index = 0; index < batch.length; index += 1) await uploadOne(batch[index], index, batch.length);
+  return batch;
+}
+
+if (typeof document !== 'undefined') initializeReceiptForm();
+
+function initializeReceiptForm() {
 const $ = (selector, root = document) => root.querySelector(selector);
 const ui = {
   form: $('#receipt-form'), entries: $('#entries'), template: $('#entry-template'),
-  add: $('#add-entry'), count: $('#entry-count'), submit: $('#submit-all'),
-  submitText: $('#submit-text'), feedback: $('#submission-feedback'),
+  picker: $('#file-input'), dropzone: $('#dropzone'), chooseLabel: $('#choose-label'),
+  count: $('#entry-count'), submit: $('#submit-all'), submitText: $('#submit-text'),
+  feedback: $('#submission-feedback'), selectionFeedback: $('#selection-feedback'),
   summary: $('#results-summary'), savedFiles: $('#saved-files'), resultsCount: $('#results-count'),
-  verification: $('#verification-panel'), verificationLabel: $('#verification-label'),
-  turnstile: $('#turnstile-container'),
+  verification: $('#verification-panel'), verificationLabel: $('#verification-label'), turnstile: $('#turnstile-container'),
 };
 const uploadUrl = getUploadUrl(APP_CONFIG);
 const submissionId = newId();
@@ -30,23 +73,9 @@ function announce(message, error = false) {
   ui.feedback.classList.toggle('is-error', error);
 }
 
-function fieldError(entry, field, message) {
-  const element = $(`.${field}-error`, entry.element);
-  element.textContent = message;
-  element.hidden = !message;
-  const wrapper = $(`.${field === 'file' ? 'upload' : field}-field`, entry.element);
-  wrapper.classList.toggle('has-error', Boolean(message));
-  const targets = field === 'type' ? wrapper.querySelectorAll('input') : [$(field === 'category' ? 'select' : field === 'notes' ? 'textarea' : '.pick-file', wrapper)];
-  targets.forEach(target => {
-    if (message) target.setAttribute('aria-invalid', 'true');
-    else target.removeAttribute('aria-invalid');
-  });
-}
-
-function validateCard(entry) {
-  const errors = validateEntry(entry);
-  ['type', 'category', 'notes', 'file'].forEach(field => fieldError(entry, field, errors[field] || ''));
-  return Object.keys(errors).length === 0;
+function selectionFeedback(message) {
+  ui.selectionFeedback.textContent = message;
+  ui.selectionFeedback.hidden = !message;
 }
 
 function setStatus(entry, status, description, progress) {
@@ -54,7 +83,7 @@ function setStatus(entry, status, description, progress) {
   entry.element.dataset.status = status;
   const badge = $('.status-badge', entry.element);
   badge.dataset.status = status;
-  badge.textContent = { waiting: 'Menunggu', verifying: 'Memverifikasi', uploading: 'Mengunggah', success: 'Berhasil', error: 'Gagal' }[status];
+  badge.textContent = { waiting: 'Siap diunggah', verifying: 'Memverifikasi', uploading: 'Mengunggah', success: 'Berhasil', error: 'Gagal' }[status];
   $('.status-description', entry.element).textContent = description;
   const progressBox = $('.entry-progress', entry.element);
   progressBox.hidden = !['verifying', 'uploading'].includes(status);
@@ -64,39 +93,40 @@ function setStatus(entry, status, description, progress) {
   $('.progress-text', progressBox).textContent = status === 'verifying' ? 'Menunggu pemeriksaan keamanan…' : typeof progress === 'number' && progress < 100 ? `Mengirim file… ${progress}%` : 'Menyimpan dan memeriksa file serta data…';
   const saved = $('.saved-filename', entry.element);
   saved.hidden = status !== 'success';
-  saved.textContent = entry.savedFilename || '';
+  saved.textContent = entry.savedFilename ? `Tersimpan: ${entry.savedFilename}` : '';
   refreshControls();
 }
 
 function refreshControls() {
-  entries.forEach((entry, index) => {
-    const number = index + 1;
-    $('h3', entry.element).textContent = `Nota ${number}`;
-    $('.receipt-number', entry.element).textContent = String(number).padStart(2, '0');
+  entries.forEach(entry => {
     const remove = $('.remove-entry', entry.element);
-    remove.setAttribute('aria-label', `Hapus Nota ${number}`);
-    remove.disabled = running || entry.attempted || entries.length === 1;
-    const locked = running || entry.attempted;
-    entry.element.querySelectorAll('input, select, textarea, .pick-file, .camera-button, .replace-file, .clear-file').forEach(control => { control.disabled = locked; });
-    $('.dropzone', entry.element).setAttribute('aria-disabled', String(locked));
+    remove.setAttribute('aria-label', `Hapus ${entry.file.name} dari daftar`);
+    // A sent file retains its identity, even if its acknowledgement was lost.
+    remove.hidden = entry.attempted || entry.status === 'success';
+    remove.disabled = running;
     $('.entry-lock-note', entry.element).hidden = !entry.attempted || entry.status === 'success';
     const retry = $('.retry-entry', entry.element);
     retry.hidden = entry.status !== 'error' || entry.retryable === false;
     retry.disabled = running || !uploadUrl;
-    retry.setAttribute('aria-label', `Coba unggah Nota ${number} lagi`);
+    retry.setAttribute('aria-label', `Coba unggah ${entry.file.name} lagi`);
   });
-  ui.count.textContent = `${entries.length} dari ${MAX_ENTRIES}`;
-  ui.add.disabled = running || entries.length >= MAX_ENTRIES;
+  ui.count.textContent = `${entries.length} dari ${MAX_ENTRIES} nota`;
+  ui.picker.disabled = running || entries.length >= MAX_ENTRIES;
+  ui.dropzone.setAttribute('aria-disabled', String(ui.picker.disabled));
+  ui.chooseLabel.textContent = entries.length >= MAX_ENTRIES ? 'Batas 10 nota tercapai' : entries.length ? 'Tambah file nota' : 'Pilih beberapa file nota';
   const pending = pendingEntries(entries);
+  const onlyRetries = pending.length > 0 && pending.every(entry => entry.status === 'error');
   ui.submit.disabled = running || !uploadUrl || pending.length === 0;
-  ui.submitText.textContent = running ? 'Sedang Mengirim…' : pending.length ? `Unggah ${pending.length} Nota` : entries.some(entry => entry.status === 'error') ? 'Periksa Nota yang Gagal' : 'Semua Nota Berhasil Diunggah';
+  ui.submitText.textContent = running ? 'Sedang mengunggah…' : onlyRetries ? `Coba lagi ${pending.length} nota` : pending.length ? `Unggah semua nota (${pending.length})` : entries.some(entry => entry.status === 'error') ? 'Periksa nota yang gagal' : entries.length ? 'Semua nota berhasil diunggah' : 'Unggah semua nota (0)';
   ui.submit.setAttribute('aria-busy', String(running));
+  ui.form.setAttribute('aria-busy', String(running));
 }
 
 function updateSummary() {
   const successful = entries.filter(entry => entry.status === 'success');
-  ui.summary.hidden = successful.length === 0;
-  ui.resultsCount.textContent = `${successful.length} dari ${entries.length} nota berhasil disimpan beserta datanya.`;
+  const failed = entries.filter(entry => entry.status === 'error');
+  ui.summary.hidden = successful.length === 0 && failed.length === 0;
+  ui.resultsCount.textContent = `${successful.length} nota berhasil diunggah${failed.length ? `, ${failed.length} gagal` : ''}.`;
   ui.savedFiles.replaceChildren();
   successful.forEach(entry => {
     const item = document.createElement('li');
@@ -105,122 +135,51 @@ function updateSummary() {
   });
 }
 
-function setFile(entry, file) {
-  if (running || entry.attempted) return;
-  const error = validateFile(file);
-  if (error) {
-    if (entry.file) clearFile(entry);
-    fieldError(entry, 'file', error);
-    return;
-  }
-  if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
-  entry.file = file;
-  entry.previewUrl = null;
-  entry.frozenPayload = null;
-  $('.dropzone', entry.element).hidden = true;
-  $('.file-preview', entry.element).hidden = false;
-  $('.original-filename', entry.element).textContent = file.name;
-  $('.file-size', entry.element).textContent = formatFileSize(file.size);
-  const image = $('.preview-image', entry.element);
+function announceReady() {
+  const ready = entries.filter(entry => entry.status === 'waiting').length;
+  const success = entries.filter(entry => entry.status === 'success').length;
+  const errors = entries.filter(entry => entry.status === 'error').length;
+  announce(errors ? `${success} nota berhasil diunggah, ${errors} gagal.${ready ? ` ${ready} nota siap diunggah.` : ' Silakan coba lagi untuk nota yang gagal.'}` : ready ? `${ready} nota siap diunggah.` : success ? `${success} nota berhasil diunggah.` : 'Pilih file nota untuk mulai mengunggah.', errors > 0);
+}
+
+function addFile(file) {
+  const fragment = ui.template.content.cloneNode(true);
+  const element = $('.receipt-file', fragment);
+  const entry = { id: newId(), uploadMode: 'original', element, file, previewUrl: null, status: 'waiting', attempted: false, frozenPayload: null, retryable: true };
+  element.id = `entry-${entry.id}`;
+  const name = $('.original-filename', element);
+  name.id = `filename-${entry.id}`;
+  name.textContent = file.name;
+  element.setAttribute('aria-labelledby', name.id);
+  $('.file-size', element).textContent = formatFileSize(file.size);
+  const image = $('.preview-image', element);
   image.hidden = file.type === 'application/pdf';
-  $('.pdf-preview', entry.element).hidden = file.type !== 'application/pdf';
-  image.removeAttribute('src');
+  $('.pdf-preview', element).hidden = file.type !== 'application/pdf';
   if (file.type !== 'application/pdf') {
     entry.previewUrl = URL.createObjectURL(file);
     image.src = entry.previewUrl;
   }
-  fieldError(entry, 'file', '');
-  setStatus(entry, 'waiting', 'File siap. Lengkapi pilihan, lalu unggah nota.');
-}
-
-function clearFile(entry) {
-  if (running || entry.attempted) return;
-  if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
-  entry.file = null;
-  entry.previewUrl = null;
-  entry.frozenPayload = null;
-  $('.preview-image', entry.element).removeAttribute('src');
-  $('.file-preview', entry.element).hidden = true;
-  $('.dropzone', entry.element).hidden = false;
-  $('.file-input', entry.element).value = '';
-  $('.camera-input', entry.element).value = '';
-  fieldError(entry, 'file', '');
-  setStatus(entry, 'waiting', 'Pilih file nota Anda.');
-  $('.pick-file', entry.element).focus();
-}
-
-function addEntry(focus = false) {
-  if (running || entries.length >= MAX_ENTRIES) return;
-  const fragment = ui.template.content.cloneNode(true);
-  const element = $('.receipt-card', fragment);
-  const id = newId();
-  element.id = `entry-${id}`;
-  const entry = { id, element, receiptType: '', receiptCategory: '', notes: '', file: null, previewUrl: null, status: 'waiting', attempted: false, frozenPayload: null, retryable: true, savedFilename: '' };
-  $('h3', element).id = `heading-${id}`;
-  element.setAttribute('aria-labelledby', `heading-${id}`);
-  ['type', 'category', 'notes', 'file'].forEach(field => { $(`.${field}-error`, element).id = `${field}-error-${id}`; });
-  element.querySelectorAll('.type-option input').forEach(input => {
-    input.name = `type-${id}`;
-    input.required = true;
-    input.setAttribute('aria-describedby', `type-error-${id}`);
-    input.addEventListener('change', () => { entry.receiptType = input.value; fieldError(entry, 'type', ''); });
-  });
-  const category = $('.category-select', element);
-  category.id = `category-${id}`;
-  category.setAttribute('aria-describedby', `category-error-${id}`);
-  $('.category-label', element).htmlFor = category.id;
-  CATEGORIES.forEach(([value, text]) => category.add(new Option(text, value)));
-  category.addEventListener('change', () => {
-    entry.receiptCategory = category.value;
-    $('.notes-field', element).hidden = category.value !== 'nota_lain_lain';
-    fieldError(entry, 'category', '');
-  });
-  const notes = $('.notes-input', element);
-  notes.id = `notes-${id}`;
-  notes.setAttribute('aria-describedby', `notes-error-${id}`);
-  $('.notes-label', element).htmlFor = notes.id;
-  notes.addEventListener('input', () => { entry.notes = notes.value; fieldError(entry, 'notes', ''); });
-  const picker = $('.file-input', element);
-  const camera = $('.camera-input', element);
-  picker.setAttribute('aria-label', 'Pilih file nota');
-  camera.setAttribute('aria-label', 'Ambil foto nota');
-  $('.upload-label', element).id = `upload-label-${id}`;
-  $('.pick-file', element).setAttribute('aria-describedby', `file-error-${id}`);
-  $('.pick-file', element).setAttribute('aria-labelledby', `upload-label-${id}`);
-  const openPicker = () => { picker.value = ''; picker.click(); };
-  $('.pick-file', element).addEventListener('click', openPicker);
-  $('.replace-file', element).addEventListener('click', openPicker);
-  $('.camera-button', element).addEventListener('click', () => { camera.value = ''; camera.click(); });
-  [picker, camera].forEach(input => input.addEventListener('change', () => { if (input.files?.length) setFile(entry, input.files[0]); }));
-  $('.clear-file', element).addEventListener('click', () => clearFile(entry));
-  const dropzone = $('.dropzone', element);
-  ['dragenter', 'dragover'].forEach(event => dropzone.addEventListener(event, ev => {
-    ev.preventDefault();
-    if (!running && !entry.attempted) dropzone.classList.add('drag-over');
-  }));
-  ['dragleave', 'drop'].forEach(event => dropzone.addEventListener(event, ev => { ev.preventDefault(); dropzone.classList.remove('drag-over'); }));
-  dropzone.addEventListener('drop', ev => {
-    if (running || entry.attempted) return;
-    if (ev.dataTransfer.files.length !== 1) { fieldError(entry, 'file', 'Pilih satu file untuk setiap kartu nota. Tambahkan kartu untuk file berikutnya.'); return; }
-    setFile(entry, ev.dataTransfer.files[0]);
-  });
   $('.remove-entry', element).addEventListener('click', () => {
-    if (running || entry.attempted || entries.length <= 1) return;
-    const index = entries.indexOf(entry);
+    if (running || entry.attempted) return;
     if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
-    entries.splice(index, 1);
+    entries.splice(entries.indexOf(entry), 1);
     element.remove();
-    refreshControls();
-    updateSummary();
-    $('.type-option input', entries[Math.min(index, entries.length - 1)].element).focus();
-    announce(`Nota dihapus. ${entries.length} kartu nota tersedia.`);
+    refreshControls(); updateSummary(); announceReady();
+    ui.picker.focus();
   });
   $('.retry-entry', element).addEventListener('click', () => startUpload([entry]));
   entries.push(entry);
   ui.entries.append(fragment);
-  refreshControls();
-  updateSummary();
-  if (focus) { $('.type-option input', element).focus(); announce(`Nota ${entries.length} ditambahkan.`); }
+  setStatus(entry, 'waiting', '');
+}
+
+function appendFiles(selectedFiles) {
+  if (running) return;
+  const selection = selectFilesForBatch(entries, selectedFiles);
+  if (selection.error) { selectionFeedback(selection.error); return; }
+  selection.files.forEach(addFile);
+  selectionFeedback(selection.duplicates ? `${selection.duplicates} file yang sudah ada dalam daftar tidak ditambahkan ulang.` : '');
+  refreshControls(); announceReady();
 }
 
 function loadTurnstile() {
@@ -311,7 +270,7 @@ function sendUpload(entry, payload) {
     xhr.onload = () => {
       let response;
       try { response = JSON.parse(xhr.responseText); } catch {
-        reject(new Error('Jawaban server tidak dapat dipastikan. Coba lagi dengan kartu ini agar file tidak tersimpan dua kali.'));
+        reject(new Error('Jawaban server tidak dapat dipastikan. Coba lagi dengan file ini agar file tidak tersimpan dua kali.'));
         return;
       }
       if (xhr.status >= 200 && xhr.status < 300 && isStoredResponse(response, payload)) { resolve(response); return; }
@@ -319,11 +278,11 @@ function sendUpload(entry, payload) {
         const error = new Error(response.error.message.slice(0, 500));
         error.retryable = response.error.retryable !== false;
         reject(error);
-      } else reject(new Error('Penyimpanan belum dapat dikonfirmasi. Coba lagi dengan kartu ini agar tidak membuat salinan.'));
+      } else reject(new Error('Penyimpanan belum dapat dikonfirmasi. Coba lagi dengan file ini agar tidak membuat salinan.'));
     };
-    xhr.onerror = () => reject(new Error('Koneksi terputus atau layanan tidak terjangkau. Coba lagi dengan kartu yang sama; file yang sudah tersimpan tidak akan digandakan.'));
-    xhr.ontimeout = () => reject(new Error('Server belum memberi konfirmasi. Coba lagi dengan kartu yang sama untuk memeriksa atau melanjutkan penyimpanan.'));
-    xhr.onabort = () => reject(new Error('Pengiriman terhenti. Coba lagi menggunakan kartu ini.'));
+    xhr.onerror = () => reject(new Error('Koneksi terputus atau layanan tidak terjangkau. Coba lagi dengan file yang sama; file yang sudah tersimpan tidak akan digandakan.'));
+    xhr.ontimeout = () => reject(new Error('Server belum memberi konfirmasi. Coba lagi dengan file yang sama untuk memeriksa atau melanjutkan penyimpanan.'));
+    xhr.onabort = () => reject(new Error('Pengiriman terhenti. Coba lagi menggunakan file ini.'));
     // From this point onward, always retain the exact same entry ID and payload.
     entry.attempted = true;
     refreshControls();
@@ -337,26 +296,20 @@ async function uploadEntry(entry) {
     setStatus(entry, 'verifying', 'Menyiapkan file dan memeriksa keamanan…');
     if (!entry.frozenPayload) {
       const fileBase64 = await readFileBase64(entry.file);
-      entry.frozenPayload = Object.freeze({
-        submissionId, entryId: entry.id,
-        receiptType: entry.receiptType, receiptCategory: entry.receiptCategory,
-        notes: entry.receiptCategory === 'nota_lain_lain' ? entry.notes.trim() : '',
-        originalFilename: entry.file.name, mimeType: entry.file.type, fileSize: entry.file.size, fileBase64,
-      });
+      entry.frozenPayload = createUploadPayload(submissionId, entry, fileBase64);
     }
     const token = await getTurnstileToken(entry);
     ui.verification.hidden = true;
     setStatus(entry, 'uploading', 'Mengirim file nota…', 0);
     const result = await sendUpload(entry, { ...entry.frozenPayload, turnstileToken: token });
     entry.savedFilename = result.savedFilename;
-    // Confirmed entries can never be resent; release their large base64 copy.
     entry.frozenPayload = null;
     setStatus(entry, 'success', result.replayed ? 'Penyimpanan sebelumnya telah dikonfirmasi. Tidak ada salinan baru.' : 'File dan data nota berhasil disimpan.');
   } catch (error) {
     entry.retryable = error.retryable !== false;
     if (!entry.attempted) entry.frozenPayload = null;
     const message = error.message || 'Unggahan gagal. Coba lagi.';
-    setStatus(entry, 'error', entry.retryable ? message : `${message} Hubungi pengelola; kartu ini tidak dapat dikirim ulang.`);
+    setStatus(entry, 'error', entry.retryable ? message : `${message} Hubungi pengelola; file ini tidak dapat dikirim ulang.`);
   } finally {
     ui.verification.hidden = true;
     updateSummary();
@@ -368,44 +321,46 @@ async function startUpload(requestedEntries) {
   if (!uploadUrl) { announce('Pengunggahan belum aktif. Hubungi pengelola formulir.', true); return; }
   const batch = pendingEntries(requestedEntries);
   if (!batch.length) return;
-  // Check every included card before a batch. Do not send a partial batch when
-  // another included card is incomplete. Successful cards stay untouched.
-  let firstInvalid = null;
-  entries.filter(entry => entry.status !== 'success').forEach(entry => {
-    if (!validateCard(entry) && !firstInvalid) firstInvalid = entry;
-  });
-  if (firstInvalid) {
-    announce('Lengkapi jenis, kategori, dan file pada setiap kartu sebelum mengunggah.', true);
-    $('[aria-invalid="true"]', firstInvalid.element)?.focus();
-    return;
+  for (const entry of batch) {
+    const errors = validateEntry(entry);
+    if (Object.keys(errors).length) {
+      announce(errors.file || 'File tidak dapat diunggah. Pilih file nota yang valid.', true);
+      return;
+    }
   }
   running = true;
+  selectionFeedback('');
   refreshControls();
-  let completed = 0;
-  for (const entry of batch) {
-    announce(`Memproses Nota ${entries.indexOf(entry) + 1}. ${completed} dari ${batch.length} nota pada pengiriman ini selesai.`);
-    await uploadEntry(entry);
-    completed += 1;
+  try {
+    await processUploadBatch(batch, async (entry, index, count) => {
+      announce(`Mengunggah ${entry.file.name}. ${index} dari ${count} nota pada pengiriman ini selesai.`);
+      await uploadEntry(entry);
+    });
+  } finally {
+    running = false;
+    refreshControls(); updateSummary(); announceReady();
   }
-  running = false;
-  refreshControls();
-  updateSummary();
-  const failed = entries.filter(entry => entry.status === 'error');
-  const successes = entries.filter(entry => entry.status === 'success').length;
-  if (failed.length) announce(`${successes} nota berhasil disimpan, ${failed.length} nota gagal. Periksa pesan pada kartu yang gagal dan gunakan Coba lagi jika tersedia.`, true);
-  else announce(`Nota berhasil dikirim! ${successes} nota telah disimpan beserta datanya.`);
 }
 
-ui.add.addEventListener('click', () => addEntry(true));
+ui.picker.addEventListener('click', () => { ui.picker.value = ''; });
+ui.picker.addEventListener('change', () => appendFiles(ui.picker.files));
+['dragenter', 'dragover'].forEach(name => ui.dropzone.addEventListener(name, event => {
+  event.preventDefault();
+  if (!running && entries.length < MAX_ENTRIES) ui.dropzone.classList.add('drag-over');
+}));
+['dragleave', 'drop'].forEach(name => ui.dropzone.addEventListener(name, event => {
+  event.preventDefault(); ui.dropzone.classList.remove('drag-over');
+}));
+ui.dropzone.addEventListener('drop', event => appendFiles(event.dataTransfer?.files));
 ui.form.addEventListener('submit', event => { event.preventDefault(); startUpload(entries); });
 window.addEventListener('beforeunload', event => {
-  if (running || entries.some(entry => entry.status !== 'success' && (entry.file || entry.attempted))) {
-    event.preventDefault();
-    event.returnValue = '';
+  if (running || entries.some(entry => entry.status !== 'success')) {
+    event.preventDefault(); event.returnValue = '';
   }
 });
-// Prevent an accidental dropped file from navigating away from the form.
+// Prevent accidental file drops from navigating away from this form.
 window.addEventListener('dragover', event => { if (event.dataTransfer?.types.includes('Files')) event.preventDefault(); });
 window.addEventListener('drop', event => { if (event.dataTransfer?.types.includes('Files')) event.preventDefault(); });
 $('#config-notice').hidden = Boolean(uploadUrl);
-addEntry();
+refreshControls();
+}
