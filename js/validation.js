@@ -1,4 +1,4 @@
-export const MAX_FILE_BYTES = 5 * 1024 * 1024;
+export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 export const MAX_ENTRIES = 10;
 export const MAX_NOTES_LENGTH = 500;
 export const RECEIPT_TYPES = Object.freeze(['handwritten', 'printed', 'digital']);
@@ -20,7 +20,7 @@ export function validateFile(file) {
   if (!file) return 'Pilih file nota terlebih dahulu.';
   if (!Object.hasOwn(MIME_EXTENSIONS, file.type)) return 'Format tidak didukung. Gunakan JPG, PNG, WEBP, atau PDF.';
   if (!Number.isSafeInteger(file.size) || file.size <= 0) return 'File kosong atau tidak dapat dibaca. Pilih file lain.';
-  if (file.size > MAX_FILE_BYTES) return 'Ukuran file melebihi 5 MB. Pilih file berukuran lebih kecil.';
+  if (file.size > MAX_FILE_BYTES) return 'Ukuran file melebihi 20 MB. Pilih file berukuran lebih kecil.';
   if (!file.name || file.name.length > 255) return 'Nama file asli terlalu panjang. Gunakan nama dengan maksimal 255 karakter.';
   if (/[\u0000-\u001f\u007f/\\]/.test(file.name)) return 'Nama file mengandung karakter yang tidak didukung. Ubah nama file, lalu pilih kembali.';
   return '';

@@ -1,5 +1,5 @@
 import { APP_CONFIG } from './config.js';
-import { MAX_ENTRIES, validateFile, validateEntry, getUploadUrl, isStoredResponse, formatFileSize, pendingEntries } from './validation.js?v=original-v2';
+import { MAX_ENTRIES, validateFile, validateEntry, getUploadUrl, isStoredResponse, formatFileSize, pendingEntries } from './validation.js?v=original-v3-20mb';
 
 function selectionKey(file) {
   return JSON.stringify([file.name, file.size, file.type, file.lastModified]);
@@ -261,7 +261,7 @@ function sendUpload(entry, payload) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', uploadUrl);
-    xhr.timeout = 150000;
+    xhr.timeout = 240000;
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.upload.onprogress = event => {
       const progress = event.lengthComputable ? Math.min(100, Math.round(event.loaded / event.total * 100)) : undefined;
